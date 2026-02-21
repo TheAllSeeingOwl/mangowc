@@ -65,12 +65,15 @@ static struct wlr_buffer *tabbar_create_text_buffer(const char *text,
 	int width, int height, const float *bg_color, const float *text_color,
 	int radius, bool round_tl, bool round_tr) {
 
+	if (width <= 0 || height <= 0 || width > INT32_MAX / 4)
+		return NULL;
+
 	struct tabbar_buffer *buf = calloc(1, sizeof(*buf));
 	if (!buf)
 		return NULL;
 
-	buf->stride = width * 4;
-	buf->data = calloc(1, buf->stride * height);
+	buf->stride = (uint32_t)width * 4;
+	buf->data = calloc(height, buf->stride);
 	if (!buf->data) {
 		free(buf);
 		return NULL;
@@ -191,9 +194,17 @@ tabbed(Monitor *m) {
 	int bar_x = m->w.x + cur_gappoh + bw; /* inside border */
 	int bar_y = m->w.y + cur_gappov + bw;
 	int bar_w = m->w.width - 2 * cur_gappoh - 2 * bw;
+	if (bar_w <= 0) {
+		tabbar_cleanup(m);
+		return;
+	}
 	int tab_gap = bw; /* gap between tabs matches border width */
 	int total_gaps = (n - 1) * tab_gap;
 	int tab_width = (bar_w - total_gaps) / n;
+	if (tab_width <= 0) {
+		tabbar_cleanup(m);
+		return;
+	}
 	/* Draw border around tab bar only (window has its own border) */
 	int outer_x = m->w.x + cur_gappoh;
 	int outer_y = m->w.y + cur_gappov;
@@ -233,6 +244,8 @@ tabbed(Monitor *m) {
 
 	for (i = 0; i < n; i++) {
 		c = m->tabbar_clients[i];
+		if (!c)
+			continue;
 		bool is_focused = (c == m->sel);
 		const float *bg = is_focused ? tabbar_active_bg_color : tabbar_inactive_bg_color;
 		const float *fg = is_focused ? tabbar_active_text_color : tabbar_inactive_text_color;

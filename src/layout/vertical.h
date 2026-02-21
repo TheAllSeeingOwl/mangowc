@@ -24,10 +24,15 @@ void vertical_tile(Monitor *m) {
 	cur_gapoh = smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gapoh;
 	cur_gapov = smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gapov;
 
-	wl_list_for_each(fc, &clients, link) {
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+	fc = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			fc = c;
 			break;
+		}
 	}
+	if (!fc)
+		return;
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
@@ -63,10 +68,10 @@ void vertical_tile(Monitor *m) {
 					master_surplus_ratio - c->master_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				w = (m->w.width - mx - cur_gapih - cur_gapih * ie * (r - 1)) /
-					r;
-				c->master_inner_per = w / (m->w.width - mx - cur_gapih -
-										   cur_gapih * ie * (r - 1));
+				int32_t denom = m->w.width - mx - cur_gapih -
+							cur_gapih * ie * (r - 1);
+				w = denom > 0 ? denom / r : 0;
+				c->master_inner_per = denom > 0 ? (float)w / denom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 			resize(c,
@@ -85,10 +90,10 @@ void vertical_tile(Monitor *m) {
 				slave_surplus_ratio = slave_surplus_ratio - c->stack_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				w = (m->w.width - tx - cur_gapih - cur_gapih * ie * (r - 1)) /
-					r;
-				c->stack_inner_per = w / (m->w.width - tx - cur_gapih -
-										  cur_gapih * ie * (r - 1));
+				int32_t sdenom = m->w.width - tx - cur_gapih -
+							 cur_gapih * ie * (r - 1);
+				w = sdenom > 0 ? sdenom / r : 0;
+				c->stack_inner_per = sdenom > 0 ? (float)w / sdenom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 
@@ -125,11 +130,15 @@ void vertical_deck(Monitor *m) {
 	if (n == 0)
 		return;
 
-	wl_list_for_each(fc, &clients, link) {
-
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+	fc = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			fc = c;
 			break;
+		}
 	}
+	if (!fc)
+		return;
 
 	// Calculate master width using mfact from pertag
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
@@ -358,6 +367,11 @@ void vertical_scroller(Monitor *m) {
 		}
 	}
 
+	if (i == n) {
+		free(tempClients);
+		return;
+	}
+
 	bool need_apply_overspread =
 		scroller_prefer_overspread && m->visible_scroll_tiling_clients > 1 &&
 		(focus_client_index == 0 || focus_client_index == n - 1) &&
@@ -484,7 +498,7 @@ void vertical_scroller(Monitor *m) {
 void vertical_grid(Monitor *m) {
 	int32_t i, n;
 	int32_t cx, cy, cw, ch;
-	int32_t dy;
+	int32_t dy = 0;
 	int32_t rows, cols, overrows;
 	Client *c = NULL;
 	int32_t target_gappo =

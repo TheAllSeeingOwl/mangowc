@@ -2,7 +2,7 @@
 void grid(Monitor *m) {
 	int32_t i, n;
 	int32_t cx, cy, cw, ch;
-	int32_t dx;
+	int32_t dx = 0;
 	int32_t cols, rows, overcols;
 	Client *c = NULL;
 	n = 0;
@@ -134,11 +134,15 @@ void deck(Monitor *m) {
 	if (n == 0)
 		return;
 
-	wl_list_for_each(fc, &clients, link) {
-
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+	fc = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			fc = c;
 			break;
+		}
 	}
+	if (!fc)
+		return;
 
 	// Calculate master width using mfact from pertag
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
@@ -374,6 +378,11 @@ void scroller(Monitor *m) {
 		}
 	}
 
+	if (i == n) {
+		free(tempClients);
+		return;
+	}
+
 	bool need_apply_overspread =
 		scroller_prefer_overspread && m->visible_scroll_tiling_clients > 1 &&
 		(focus_client_index == 0 || focus_client_index == n - 1) &&
@@ -512,10 +521,15 @@ void center_tile(Monitor *m) {
 		return;
 
 	// 获取第一个可见的平铺客户端用于主区域宽度百分比
-	wl_list_for_each(fc, &clients, link) {
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+	fc = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			fc = c;
 			break;
+		}
 	}
+	if (!fc)
+		return;
 
 	// 间隙参数处理
 	int32_t cur_gappiv = enablegaps ? m->gappiv : 0; // 内部垂直间隙
@@ -606,11 +620,10 @@ void center_tile(Monitor *m) {
 					master_surplus_ratio - c->master_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - my - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->master_inner_per = h / (m->w.height - my - cur_gappov -
-										   cur_gappiv * ie * (r - 1));
+				int32_t denom = m->w.height - my - cur_gappov -
+								cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				c->master_inner_per = denom > 0 ? (float)h / denom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 
@@ -634,11 +647,10 @@ void center_tile(Monitor *m) {
 						c->stack_inner_per;
 					c->master_mfact_per = mfact;
 				} else {
-					h = (m->w.height - ety - cur_gappov -
-						 cur_gappiv * ie * (r - 1)) /
-						r;
-					c->stack_inner_per = h / (m->w.height - ety - cur_gappov -
-											  cur_gappiv * ie * (r - 1));
+					int32_t sdenom = m->w.height - ety - cur_gappov -
+									 cur_gappiv * ie * (r - 1);
+					h = sdenom > 0 ? sdenom / r : 0;
+					c->stack_inner_per = sdenom > 0 ? (float)h / sdenom : 1.0f;
 					c->master_mfact_per = mfact;
 				}
 
@@ -673,12 +685,10 @@ void center_tile(Monitor *m) {
 							slave_right_surplus_ratio - c->stack_inner_per;
 						c->master_mfact_per = mfact;
 					} else {
-						h = (m->w.height - ety - cur_gappov -
-							 cur_gappiv * ie * (r - 1)) /
-							r;
-						c->stack_inner_per =
-							h / (m->w.height - ety - cur_gappov -
-								 cur_gappiv * ie * (r - 1));
+						int32_t sdenom = m->w.height - ety - cur_gappov -
+										 cur_gappiv * ie * (r - 1);
+						h = sdenom > 0 ? sdenom / r : 0;
+						c->stack_inner_per = sdenom > 0 ? (float)h / sdenom : 1.0f;
 						c->master_mfact_per = mfact;
 					}
 
@@ -702,12 +712,10 @@ void center_tile(Monitor *m) {
 							slave_left_surplus_ratio - c->stack_inner_per;
 						c->master_mfact_per = mfact;
 					} else {
-						h = (m->w.height - oty - cur_gappov -
-							 cur_gappiv * ie * (r - 1)) /
-							r;
-						c->stack_inner_per =
-							h / (m->w.height - oty - cur_gappov -
-								 cur_gappiv * ie * (r - 1));
+						int32_t sdenom = m->w.height - oty - cur_gappov -
+										 cur_gappiv * ie * (r - 1);
+						h = sdenom > 0 ? sdenom / r : 0;
+						c->stack_inner_per = sdenom > 0 ? (float)h / sdenom : 1.0f;
 						c->master_mfact_per = mfact;
 					}
 
@@ -752,11 +760,15 @@ void tile(Monitor *m) {
 	cur_gappov = smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappov;
 	cur_gappoh = smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappoh;
 
-	wl_list_for_each(fc, &clients, link) {
-
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+	fc = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			fc = c;
 			break;
+		}
 	}
+	if (!fc)
+		return;
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
@@ -791,11 +803,10 @@ void tile(Monitor *m) {
 					master_surplus_ratio - c->master_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - my - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->master_inner_per = h / (m->w.height - my - cur_gappov -
-										   cur_gappiv * ie * (r - 1));
+				int32_t denom = m->w.height - my - cur_gappov -
+								cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				c->master_inner_per = denom > 0 ? (float)h / denom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 			resize(c,
@@ -814,11 +825,10 @@ void tile(Monitor *m) {
 				slave_surplus_ratio = slave_surplus_ratio - c->stack_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - ty - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->stack_inner_per = h / (m->w.height - ty - cur_gappov -
-										  cur_gappiv * ie * (r - 1));
+				int32_t sdenom = m->w.height - ty - cur_gappov -
+								 cur_gappiv * ie * (r - 1);
+				h = sdenom > 0 ? sdenom / r : 0;
+				c->stack_inner_per = sdenom > 0 ? (float)h / sdenom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 
@@ -860,11 +870,15 @@ void right_tile(Monitor *m) {
 	cur_gappov = smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappov;
 	cur_gappoh = smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappoh;
 
-	wl_list_for_each(fc, &clients, link) {
-
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+	fc = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			fc = c;
 			break;
+		}
 	}
+	if (!fc)
+		return;
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
@@ -899,11 +913,10 @@ void right_tile(Monitor *m) {
 					master_surplus_ratio - c->master_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - my - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->master_inner_per = h / (m->w.height - my - cur_gappov -
-										   cur_gappiv * ie * (r - 1));
+				int32_t denom = m->w.height - my - cur_gappov -
+								cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				c->master_inner_per = denom > 0 ? (float)h / denom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 			resize(c,
@@ -923,11 +936,10 @@ void right_tile(Monitor *m) {
 				slave_surplus_ratio = slave_surplus_ratio - c->stack_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - ty - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->stack_inner_per = h / (m->w.height - ty - cur_gappov -
-										  cur_gappiv * ie * (r - 1));
+				int32_t sdenom = m->w.height - ty - cur_gappov -
+								 cur_gappiv * ie * (r - 1);
+				h = sdenom > 0 ? sdenom / r : 0;
+				c->stack_inner_per = sdenom > 0 ? (float)h / sdenom : 1.0f;
 				c->master_mfact_per = mfact;
 			}
 

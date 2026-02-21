@@ -33,7 +33,7 @@ void get_layout_abbr(char *abbr, const char *full_name) {
 	// 1. 尝试在映射表中查找
 	for (int32_t i = 0; layout_mappings[i].full_name != NULL; i++) {
 		if (strcmp(full_name, layout_mappings[i].full_name) == 0) {
-			strcpy(abbr, layout_mappings[i].abbr);
+			snprintf(abbr, 32, "%s", layout_mappings[i].abbr);
 			return;
 		}
 	}
@@ -111,11 +111,15 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 			c = NULL;
 			l = NULL;
 		} else {
-			for (pnode = node; pnode && !c; pnode = &pnode->parent->node)
+			struct wlr_scene_node *found_pnode = NULL;
+			for (pnode = node; pnode && !c; pnode = &pnode->parent->node) {
 				c = pnode->data;
+				if (c) found_pnode = pnode;
+			}
 			if (c && c->type == LayerShell) {
 				c = NULL;
-				l = pnode->data;
+				if (found_pnode)
+					l = found_pnode->data;
 			}
 		}
 
