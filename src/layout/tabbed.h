@@ -1,8 +1,5 @@
 #include <cairo.h>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 #include <pango/pangocairo.h>
 #include <wlr/interfaces/wlr_buffer.h>
 
@@ -10,7 +7,29 @@
 #define DRM_FORMAT_ARGB8888 0x34325241
 #endif
 
-/* Simple pixel buffer wrapper for wlr_buffer */
+/* Cached PangoFontDescription for tab bar text rendering */
+static PangoFontDescription *tabbar_cached_font_desc = NULL;
+static char *tabbar_cached_font_family = NULL;
+static int tabbar_cached_font_size = 0;
+
+static PangoFontDescription *tabbar_get_font_desc(void) {
+	if (tabbar_cached_font_desc &&
+		tabbar_cached_font_family &&
+		strcmp(tabbar_cached_font_family, tabbar_font_family) == 0 &&
+		tabbar_cached_font_size == tabbar_font_size) {
+		return tabbar_cached_font_desc;
+	}
+	if (tabbar_cached_font_desc)
+		pango_font_description_free(tabbar_cached_font_desc);
+	free(tabbar_cached_font_family);
+	tabbar_cached_font_family = strdup(tabbar_font_family);
+	tabbar_cached_font_size = tabbar_font_size;
+	tabbar_cached_font_desc = pango_font_description_from_string(tabbar_font_family);
+	pango_font_description_set_absolute_size(tabbar_cached_font_desc, tabbar_font_size * PANGO_SCALE);
+	return tabbar_cached_font_desc;
+}
+
+/* Simple pixel buffer wrapper for wlr_buffer (text-only, transparent bg) */
 struct tabbar_buffer {
 	struct wlr_buffer base;
 	void *data;
@@ -42,28 +61,8 @@ static const struct wlr_buffer_impl tabbar_buffer_impl = {
 	.end_data_ptr_access = tabbar_buffer_end_data_ptr_access,
 };
 
-static void tabbar_draw_rounded_rect(cairo_t *cr, double x, double y,
-	double w, double h, double r, bool round_tl, bool round_tr) {
-	cairo_new_sub_path(cr);
-	if (round_tr)
-		cairo_arc(cr, x + w - r, y + r, r, -M_PI / 2, 0);
-	else
-		cairo_line_to(cr, x + w, y);
-
-	cairo_line_to(cr, x + w, y + h);
-	cairo_line_to(cr, x, y + h);
-
-	if (round_tl)
-		cairo_arc(cr, x + r, y + r, r, M_PI, 3 * M_PI / 2);
-	else
-		cairo_line_to(cr, x, y);
-
-	cairo_close_path(cr);
-}
-
 static struct wlr_buffer *tabbar_create_text_buffer(const char *text,
-	int width, int height, const float *bg_color, const float *text_color,
-	int radius, bool round_tl, bool round_tr) {
+	int width, int height, const float *text_color) {
 
 	if (width <= 0 || height <= 0 || width > INT32_MAX / 4)
 		return NULL;
@@ -85,22 +84,15 @@ static struct wlr_buffer *tabbar_create_text_buffer(const char *text,
 		buf->data, CAIRO_FORMAT_ARGB32, width, height, buf->stride);
 	cairo_t *cr = cairo_create(surface);
 
-	/* Clear to transparent */
+	/* Clear to transparent (background handled by wlr_scene_rect) */
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 	cairo_set_source_rgba(cr, 0, 0, 0, 0);
 	cairo_paint(cr);
 
-	/* Rounded background */
-	tabbar_draw_rounded_rect(cr, 0, 0, width, height, radius, round_tl, round_tr);
-	cairo_set_source_rgba(cr, bg_color[0] * bg_color[3],
-		bg_color[1] * bg_color[3], bg_color[2] * bg_color[3], bg_color[3]);
-	cairo_fill(cr);
-
 	/* Text */
 	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 	PangoLayout *layout = pango_cairo_create_layout(cr);
-	PangoFontDescription *font_desc = pango_font_description_from_string(tabbar_font_family);
-	pango_font_description_set_absolute_size(font_desc, tabbar_font_size * PANGO_SCALE);
+	PangoFontDescription *font_desc = tabbar_get_font_desc();
 	pango_layout_set_font_description(layout, font_desc);
 	pango_layout_set_text(layout, text, -1);
 	pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
@@ -114,7 +106,7 @@ static struct wlr_buffer *tabbar_create_text_buffer(const char *text,
 	pango_cairo_show_layout(cr, layout);
 
 	g_object_unref(layout);
-	pango_font_description_free(font_desc);
+	/* Do not free font_desc — it is cached */
 	cairo_destroy(cr);
 	cairo_surface_destroy(surface);
 
@@ -137,6 +129,8 @@ static void tabbar_cleanup(Monitor *m) {
 	free(m->tabbar_clients);
 	m->tabbar_clients = NULL;
 	m->tabbar_n = 0;
+	m->tabbar_prev_n = 0;
+	m->tabbar_prev_focused = NULL;
 }
 
 /* Called from buttonpress to handle tab bar clicks.
@@ -173,7 +167,29 @@ tabbed(Monitor *m) {
 
 	if (n == 0) {
 		tabbar_cleanup(m);
+		m->tabbar_prev_n = 0;
+		m->tabbar_prev_focused = NULL;
 		return;
+	}
+
+	/* Find the focused tiled client early for dirty check */
+	Client *focused = NULL;
+	Client *top = focustop(m);
+	if (top && ISTILED(top)) {
+		focused = top;
+	} else {
+		wl_list_for_each(c, &fstack, flink) {
+			if (VISIBLEON(c, m) && ISTILED(c)) {
+				focused = c;
+				break;
+			}
+		}
+	}
+
+	/* Skip tab bar rebuild if nothing changed */
+	if (m->tabbar_tree && m->tabbar_prev_n == n &&
+		m->tabbar_prev_focused == focused) {
+		goto position_windows;
 	}
 
 	/* Clean up old tab bar and recreate */
@@ -246,24 +262,27 @@ tabbed(Monitor *m) {
 		c = m->tabbar_clients[i];
 		if (!c)
 			continue;
-		bool is_focused = (c == m->sel);
+		bool is_focused = (c == focused);
 		const float *bg = is_focused ? tabbar_active_bg_color : tabbar_inactive_bg_color;
 		const float *fg = is_focused ? tabbar_active_text_color : tabbar_inactive_text_color;
 
 		int tw = (i == n - 1) ? (bar_w - (tab_width + tab_gap) * (n - 1)) : tab_width;
 		int tx = i * (tab_width + tab_gap);
 
-		bool round_tl = false;
-		bool round_tr = false;
-
 		/* Store for click handling */
 		m->tabbar_tab_offsets[i] = tx;
 
+		/* Tab background as GPU-composited scene rect */
+		struct wlr_scene_rect *tab_bg = wlr_scene_rect_create(
+			m->tabbar_tree, tw, bar_h, bg);
+		wlr_scene_node_set_position(&tab_bg->node, bar_x + tx, bar_y);
+
+		/* Text overlay (transparent background, rendered with cairo/pango) */
 		const char *title = client_get_title(c);
 		if (!title)
 			title = "untitled";
 		struct wlr_buffer *text_buf = tabbar_create_text_buffer(
-			title, tw, bar_h, bg, fg, 0, round_tl, round_tr);
+			title, tw, bar_h, fg);
 		if (text_buf) {
 			struct wlr_scene_buffer *sbuf = wlr_scene_buffer_create(m->tabbar_tree, text_buf);
 			wlr_scene_node_set_position(&sbuf->node, bar_x + tx, bar_y);
@@ -279,27 +298,23 @@ tabbed(Monitor *m) {
 		}
 	}
 
+	/* Save state for dirty tracking */
+	m->tabbar_prev_n = n;
+	m->tabbar_prev_focused = focused;
+
+position_windows:;
+	/* Recalculate gaps for window positioning */
+	int32_t gappoh = enablegaps ? m->gappoh : 0;
+	int32_t gappov = enablegaps ? m->gappov : 0;
+	gappoh = smartgaps && n == 1 ? 0 : gappoh;
+	gappov = smartgaps && n == 1 ? 0 : gappov;
+
 	/* Position windows below tab bar, window's own border handles sides */
 	struct wlr_box geom;
-	geom.x = m->w.x + cur_gappoh;
-	geom.y = m->w.y + cur_gappov + bar_h + bw;
-	geom.width = m->w.width - 2 * cur_gappoh;
-	geom.height = m->w.height - 2 * cur_gappov - bar_h - bw;
-
-	/* Find the focused tiled client (not a floating window) */
-	Client *focused = NULL;
-	Client *top = focustop(m);
-	if (top && ISTILED(top)) {
-		focused = top;
-	} else {
-		/* Focused window is floating — find the last focused tiled client */
-		wl_list_for_each(c, &fstack, flink) {
-			if (VISIBLEON(c, m) && ISTILED(c)) {
-				focused = c;
-				break;
-			}
-		}
-	}
+	geom.x = m->w.x + gappoh;
+	geom.y = m->w.y + gappov + tabbar_height + borderpx;
+	geom.width = m->w.width - 2 * gappoh;
+	geom.height = m->w.height - 2 * gappov - tabbar_height - borderpx;
 
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || !ISTILED(c))

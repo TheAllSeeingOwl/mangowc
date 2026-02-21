@@ -537,6 +537,8 @@ struct Monitor {
 	int tabbar_n;
 	int *tabbar_tab_offsets; /* x offset of each tab */
 	Client **tabbar_clients; /* client for each tab */
+	int tabbar_prev_n;       /* dirty tracking: previous tab count */
+	Client *tabbar_prev_focused; /* dirty tracking: previous focused client */
 };
 
 typedef struct {
@@ -824,6 +826,7 @@ static struct wl_list clients; /* tiling order */
 static struct wl_list fstack;  /* focus order */
 static struct wl_list fadeout_clients;
 static struct wl_list fadeout_layers;
+static struct timespec frame_now;
 static struct wlr_idle_notifier_v1 *idle_notifier;
 static struct wlr_idle_inhibit_manager_v1 *idle_inhibit_mgr;
 static struct wlr_layer_shell_v1 *layer_shell;
@@ -4517,6 +4520,8 @@ void rendermon(struct wl_listener *listener, void *data) {
 		return;
 
 	frame_allow_tearing = check_tearing_frame_allow(m);
+
+	clock_gettime(CLOCK_MONOTONIC, &frame_now);
 
 	// 绘制层和淡出效果
 	for (i = 0; i < LENGTH(m->layers); i++) {

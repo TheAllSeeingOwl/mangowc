@@ -70,9 +70,13 @@ endif
 # 定义编译参数
 c_args = [
   '-g',
+  '-O2',
+  '-fPIE',
+  '-s',
   '-Wno-unused-function',
   '-DWLR_USE_UNSTABLE',
   '-D_POSIX_C_SOURCE=200809L',
+  '-D_FORTIFY_SOURCE=2',
   '-DVERSION="@0@"'.format(version_with_hash),
   '-DSYSCONFDIR="@0@"'.format('/etc'),
 ]
@@ -91,7 +95,7 @@ if xcb.found() and xlibs.found()
 endif
 
 # 链接参数（根据 debug 状态添加 ASAN）
-link_args = []
+link_args = ['-pie', '-s']
 if get_option('asan')
   link_args += '-fsanitize=address'
 endif
