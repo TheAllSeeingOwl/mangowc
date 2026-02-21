@@ -77,6 +77,8 @@ void grid(Monitor *m) {
 	rows = (cols && (cols - 1) * cols >= n) ? cols - 1 : cols;
 
 	// 计算每个客户端的高度和宽度
+	if (rows == 0 || cols == 0)
+		return;
 	ch = (m->w.height - 2 * target_gappo - (rows - 1) * target_gappi) / rows;
 	cw = (m->w.width - 2 * target_gappo - (cols - 1) * target_gappi) / cols;
 
@@ -237,10 +239,12 @@ void arrange_stack(Client *scroller_stack_head, struct wlr_box geometry,
 		iter = iter->next_in_stack;
 	}
 
-	iter = scroller_stack_head;
-	while (iter) {
-		iter->stack_proportion = iter->stack_proportion / total_proportion;
-		iter = iter->next_in_stack;
+	if (total_proportion > 0.0f) {
+		iter = scroller_stack_head;
+		while (iter) {
+			iter->stack_proportion = iter->stack_proportion / total_proportion;
+			iter = iter->next_in_stack;
+		}
 	}
 
 	int32_t client_height;
@@ -251,8 +255,9 @@ void arrange_stack(Client *scroller_stack_head, struct wlr_box geometry,
 	iter = scroller_stack_head;
 	while (iter) {
 
-		client_height =
-			remain_client_height * (iter->stack_proportion / remain_proportion);
+		client_height = remain_proportion > 0.0f
+			? remain_client_height * (iter->stack_proportion / remain_proportion)
+			: remain_client_height;
 
 		struct wlr_box client_geom = {.x = geometry.x,
 									  .y = current_y,
@@ -304,17 +309,14 @@ void scroller(Monitor *m) {
 		return; // 没有需要处理的客户端，直接返回
 	}
 
-	// 动态分配内存
-	tempClients = malloc(n * sizeof(Client *));
-	if (!tempClients) {
-		// 处理内存分配失败的情况
-		return;
-	}
+	tempClients = ecalloc(n, sizeof(Client *));
 
 	// 第二次遍历，填充 tempClients
 	j = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISSCROLLTILED(c) && !c->prev_in_stack) {
+			if (j >= n)
+				break;
 			tempClients[j] = c;
 			j++;
 		}
@@ -820,8 +822,6 @@ void tile(Monitor *m) {
 				c->master_mfact_per = mfact;
 			}
 
-			// wlr_log(WLR_ERROR, "stack_inner_per: %f", c->stack_inner_per);
-
 			resize(c,
 				   (struct wlr_box){.x = m->w.x + mw + cur_gappoh,
 									.y = m->w.y + ty,
@@ -930,8 +930,6 @@ void right_tile(Monitor *m) {
 										  cur_gappiv * ie * (r - 1));
 				c->master_mfact_per = mfact;
 			}
-
-			// wlr_log(WLR_ERROR, "stack_inner_per: %f", c->stack_inner_per);
 
 			resize(c,
 				   (struct wlr_box){.x = m->w.x + cur_gappoh,

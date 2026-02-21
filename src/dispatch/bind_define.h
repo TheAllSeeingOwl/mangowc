@@ -36,11 +36,13 @@ int32_t chvt(const Arg *arg) {
 	// prevent the animation to rquest the new frame
 	allow_frame_scheduling = false;
 
-	// backup current tag and monitor name
+	// backup current tag, monitor name, and per-tag layouts
 	if (selmon) {
 		chvt_backup_tag = selmon->pertag->curtag;
 		strncpy(chvt_backup_selmon, selmon->wlr_output->name,
 				sizeof(chvt_backup_selmon) - 1);
+		for (size_t i = 0; i <= LENGTH(tags); i++)
+			chvt_backup_layouts[i] = selmon->pertag->ltidxs[i];
 	}
 
 	wlr_session_change_vt(session, arg->ui);
@@ -1040,6 +1042,44 @@ int32_t switch_proportion_preset(const Arg *arg) {
 int32_t tag(const Arg *arg) {
 	Client *target_client = selmon->sel;
 	tag_client(arg, target_client);
+	return 0;
+}
+
+int32_t tagtabbed(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return 0;
+
+	const Layout *current_layout =
+		selmon->pertag->ltidxs[selmon->pertag->curtag];
+
+	if (current_layout->id != TABBED) {
+		tag_client(arg, selmon->sel);
+		return 0;
+	}
+
+	Client *c, *tmp;
+	uint32_t newtags = arg->ui & TAGMASK;
+	if (!newtags)
+		return 0;
+
+	/* Set tags on all non-focused tiled clients first */
+	wl_list_for_each_safe(c, tmp, &clients, link) {
+		if (VISIBLEON(c, selmon) && ISTILED(c) && c != selmon->sel) {
+			exit_scroller_stack(c);
+			c->tags = newtags;
+		}
+	}
+
+	/* Also set the target tag's layout to tabbed so the group stays tabbed */
+	uint32_t target_tag_index = 0;
+	for (uint32_t t = newtags; t > 1; t >>= 1)
+		target_tag_index++;
+	if (target_tag_index < LENGTH(tags))
+		selmon->pertag->ltidxs[target_tag_index + 1] =
+			selmon->pertag->ltidxs[selmon->pertag->curtag];
+
+	/* Move focused client last (triggers view switch) */
+	tag_client(arg, selmon->sel);
 	return 0;
 }
 

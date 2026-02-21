@@ -310,6 +310,14 @@ typedef struct {
 	float globalcolor[4];
 	float overlaycolor[4];
 
+	int32_t tabbar_height;
+	float tabbar_font_size;
+	char tabbar_font_family[256];
+	float tabbar_active_bg_color[4];
+	float tabbar_inactive_bg_color[4];
+	float tabbar_active_text_color[4];
+	float tabbar_inactive_text_color[4];
+
 	char autostart[3][256];
 
 	ConfigTagRule *tag_rules; // 动态数组
@@ -1097,6 +1105,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = tag;
 		(*arg).ui = 1 << (atoi(arg_value) - 1);
 		(*arg).i = atoi(arg_value2);
+	} else if (strcmp(func_name, "tagtabbed") == 0) {
+		func = tagtabbed;
+		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).i = atoi(arg_value2);
 	} else if (strcmp(func_name, "view") == 0) {
 		func = bind_to_view;
 
@@ -1766,6 +1778,44 @@ bool parse_option(Config *config, char *key, char *value) {
 			return false;
 		} else {
 			convert_hex_to_rgba(config->overlaycolor, color);
+		}
+	} else if (strcmp(key, "tabbar_height") == 0) {
+		config->tabbar_height = atoi(value);
+	} else if (strcmp(key, "tabbar_font_size") == 0) {
+		config->tabbar_font_size = atof(value);
+	} else if (strcmp(key, "tabbar_font_family") == 0) {
+		snprintf(config->tabbar_font_family, sizeof(config->tabbar_font_family), "%s", value);
+	} else if (strcmp(key, "tabbar_active_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Invalid tabbar_active_bg_color format: %s\n", value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabbar_active_bg_color, color);
+		}
+	} else if (strcmp(key, "tabbar_inactive_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Invalid tabbar_inactive_bg_color format: %s\n", value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabbar_inactive_bg_color, color);
+		}
+	} else if (strcmp(key, "tabbar_active_text_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Invalid tabbar_active_text_color format: %s\n", value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabbar_active_text_color, color);
+		}
+	} else if (strcmp(key, "tabbar_inactive_text_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Invalid tabbar_inactive_text_color format: %s\n", value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabbar_inactive_text_color, color);
 		}
 	} else if (strcmp(key, "monitorrule") == 0) {
 		config->monitor_rules =
@@ -3229,6 +3279,15 @@ void override_config(void) {
 	memcpy(globalcolor, config.globalcolor, sizeof(globalcolor));
 	memcpy(overlaycolor, config.overlaycolor, sizeof(overlaycolor));
 
+	tabbar_height = CLAMP_INT(config.tabbar_height, 1, 200);
+	tabbar_font_size = config.tabbar_font_size;
+	if (config.tabbar_font_family[0])
+		snprintf(tabbar_font_family, sizeof(tabbar_font_family), "%s", config.tabbar_font_family);
+	memcpy(tabbar_active_bg_color, config.tabbar_active_bg_color, sizeof(tabbar_active_bg_color));
+	memcpy(tabbar_inactive_bg_color, config.tabbar_inactive_bg_color, sizeof(tabbar_inactive_bg_color));
+	memcpy(tabbar_active_text_color, config.tabbar_active_text_color, sizeof(tabbar_active_text_color));
+	memcpy(tabbar_inactive_text_color, config.tabbar_inactive_text_color, sizeof(tabbar_inactive_text_color));
+
 	// 复制动画曲线
 	memcpy(animation_curve_move, config.animation_curve_move,
 		   sizeof(animation_curve_move));
@@ -3410,6 +3469,14 @@ void set_value_default() {
 	memcpy(config.scratchpadcolor, scratchpadcolor, sizeof(scratchpadcolor));
 	memcpy(config.globalcolor, globalcolor, sizeof(globalcolor));
 	memcpy(config.overlaycolor, overlaycolor, sizeof(overlaycolor));
+
+	config.tabbar_height = tabbar_height;
+	config.tabbar_font_size = tabbar_font_size;
+	snprintf(config.tabbar_font_family, sizeof(config.tabbar_font_family), "%s", tabbar_font_family);
+	memcpy(config.tabbar_active_bg_color, tabbar_active_bg_color, sizeof(tabbar_active_bg_color));
+	memcpy(config.tabbar_inactive_bg_color, tabbar_inactive_bg_color, sizeof(tabbar_inactive_bg_color));
+	memcpy(config.tabbar_active_text_color, tabbar_active_text_color, sizeof(tabbar_active_text_color));
+	memcpy(config.tabbar_inactive_text_color, tabbar_inactive_text_color, sizeof(tabbar_inactive_text_color));
 }
 
 void set_default_key_bindings(Config *config) {

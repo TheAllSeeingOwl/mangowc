@@ -11,7 +11,8 @@ void restore_size_per(Monitor *m, Client *c) {
 	if (current_layout->id == SCROLLER ||
 		current_layout->id == VERTICAL_SCROLLER || current_layout->id == GRID ||
 		current_layout->id == VERTICAL_GRID || current_layout->id == DECK ||
-		current_layout->id == VERTICAL_DECK || current_layout->id == MONOCLE) {
+		current_layout->id == VERTICAL_DECK || current_layout->id == MONOCLE ||
+		current_layout->id == TABBED) {
 		return;
 	}
 
@@ -811,6 +812,12 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		m, m->visible_tiling_clients, total_left_stack_hight_percent,
 		total_right_stack_hight_percent, total_stack_inner_percent,
 		total_master_inner_percent, master_num, stack_num);
+
+	/* Clean up tab bar when not in tabbed layout */
+	if (!m->isoverview &&
+		m->pertag->ltidxs[m->pertag->curtag]->id != TABBED) {
+		tabbar_cleanup(m);
+	}
 
 	if (m->isoverview) {
 		overviewlayout.arrange(m);

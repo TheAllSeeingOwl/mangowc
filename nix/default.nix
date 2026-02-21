@@ -18,6 +18,8 @@
   scenefx,
   wlroots_0_19,
   libGL,
+  cairo,
+  pango,
   enableXWayland ? true,
   debug ? false,
 }:
@@ -54,6 +56,8 @@ stdenv.mkDerivation {
       wlroots_0_19
       scenefx
       libGL
+      cairo
+      pango
     ]
     ++ lib.optionals enableXWayland [
       libX11

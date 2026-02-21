@@ -39,6 +39,8 @@ libinput_dep = dependency('libinput',version: '>=1.27.1')
 libwayland_client_dep = dependency('wayland-client')
 pcre2_dep = dependency('libpcre2-8')
 libscenefx_dep = dependency('scenefx-0.4',version: '>=0.4.1')
+cairo_dep = dependency('cairo')
+pangocairo_dep = dependency('pangocairo')
 
 
 # 获取版本信息
@@ -110,6 +112,8 @@ executable('mango',
     libinput_dep,
     libwayland_client_dep,
     pcre2_dep,
+    cairo_dep,
+    pangocairo_dep,
   ],
   install : true,
   c_args : c_args,

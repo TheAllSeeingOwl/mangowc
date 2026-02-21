@@ -224,10 +224,12 @@ void arrange_stack_vertical(Client *scroller_stack_head,
 		iter = iter->next_in_stack;
 	}
 
-	iter = scroller_stack_head;
-	while (iter) {
-		iter->stack_proportion = iter->stack_proportion / total_proportion;
-		iter = iter->next_in_stack;
+	if (total_proportion > 0.0f) {
+		iter = scroller_stack_head;
+		while (iter) {
+			iter->stack_proportion = iter->stack_proportion / total_proportion;
+			iter = iter->next_in_stack;
+		}
 	}
 
 	int32_t client_width;
@@ -238,8 +240,9 @@ void arrange_stack_vertical(Client *scroller_stack_head,
 	iter = scroller_stack_head;
 	while (iter) {
 
-		client_width =
-			remain_client_width * (iter->stack_proportion / remain_proportion);
+		client_width = remain_proportion > 0.0f
+			? remain_client_width * (iter->stack_proportion / remain_proportion)
+			: remain_client_width;
 
 		struct wlr_box client_geom = {.y = geometry.y,
 									  .x = current_x,
@@ -291,14 +294,13 @@ void vertical_scroller(Monitor *m) {
 		return;
 	}
 
-	tempClients = malloc(n * sizeof(Client *));
-	if (!tempClients) {
-		return;
-	}
+	tempClients = ecalloc(n, sizeof(Client *));
 
 	j = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISSCROLLTILED(c) && !c->prev_in_stack) {
+			if (j >= n)
+				break;
 			tempClients[j] = c;
 			j++;
 		}
@@ -555,6 +557,8 @@ void vertical_grid(Monitor *m) {
 	}
 	cols = (rows && (rows - 1) * rows >= n) ? rows - 1 : rows;
 
+	if (rows == 0 || cols == 0)
+		return;
 	cw = (m->w.width - 2 * target_gappo - (cols - 1) * target_gappi) / cols;
 	ch = (m->w.height - 2 * target_gappo - (rows - 1) * target_gappi) / rows;
 

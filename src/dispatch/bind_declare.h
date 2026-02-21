@@ -20,6 +20,7 @@ int32_t togglefullscreen(const Arg *arg);
 int32_t togglemaximizescreen(const Arg *arg);
 int32_t togglegaps(const Arg *arg);
 int32_t tagmon(const Arg *arg);
+int32_t tagtabbed(const Arg *arg);
 int32_t spawn(const Arg *arg);
 int32_t spawn_shell(const Arg *arg);
 int32_t spawn_on_empty(const Arg *arg);

@@ -529,6 +529,14 @@ struct Monitor {
 	struct wlr_scene_optimized_blur *blur;
 	char last_surface_ws_name[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
+	struct wlr_scene_tree *tabbar_tree;
+	int tabbar_y;
+	int tabbar_h;
+	int tabbar_x;
+	int tabbar_total_w;
+	int tabbar_n;
+	int *tabbar_tab_offsets; /* x offset of each tab */
+	Client **tabbar_clients; /* client for each tab */
 };
 
 typedef struct {
@@ -875,6 +883,7 @@ bool render_border = true;
 uint32_t chvt_backup_tag = 0;
 bool allow_frame_scheduling = true;
 char chvt_backup_selmon[32] = {0};
+const Layout *chvt_backup_layouts[32] = {0};
 
 struct dvec2 *baked_points_move;
 struct dvec2 *baked_points_open;
@@ -976,6 +985,7 @@ static struct wl_event_source *sync_keymap;
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
+#include "layout/tabbed.h"
 #include "layout/arrange.h"
 #include "layout/horizontal.h"
 #include "layout/vertical.h"
@@ -1989,6 +1999,11 @@ buttonpress(struct wl_listener *listener, void *data) {
 		if (locked)
 			break;
 
+		/* Handle tab bar clicks */
+		if (selmon && selmon->tabbar_tree &&
+			tabbar_handle_click(selmon, cursor->x, cursor->y))
+			break;
+
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene->node.enabled &&
@@ -2234,6 +2249,7 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		wl_event_source_remove(m->skip_timeout);
 		m->skip_timeout = NULL;
 	}
+	tabbar_cleanup(m);
 	m->wlr_output->data = NULL;
 	free(m->pertag);
 	free(m);
@@ -2901,12 +2917,12 @@ void createmon(struct wl_listener *listener, void *data) {
 
 	wl_list_insert(&mons, &m->link);
 	m->pertag = calloc(1, sizeof(Pertag));
-	if (chvt_backup_tag &&
-		regex_match(chvt_backup_selmon, m->wlr_output->name)) {
+	bool chvt_restoring = chvt_backup_tag &&
+		regex_match(chvt_backup_selmon, m->wlr_output->name);
+
+	if (chvt_restoring) {
 		m->tagset[0] = m->tagset[1] = (1 << (chvt_backup_tag - 1)) & TAGMASK;
 		m->pertag->curtag = m->pertag->prevtag = chvt_backup_tag;
-		chvt_backup_tag = 0;
-		memset(chvt_backup_selmon, 0, sizeof(chvt_backup_selmon));
 	} else {
 		m->tagset[0] = m->tagset[1] = 1;
 		m->pertag->curtag = m->pertag->prevtag = 1;
@@ -2920,6 +2936,17 @@ void createmon(struct wl_listener *listener, void *data) {
 
 	// apply tag rule
 	parse_tagrule(m);
+
+	/* Restore chvt layouts AFTER parse_tagrule so they aren't overwritten */
+	if (chvt_restoring) {
+		for (i = 0; i <= LENGTH(tags); i++) {
+			if (chvt_backup_layouts[i])
+				m->pertag->ltidxs[i] = chvt_backup_layouts[i];
+		}
+		chvt_backup_tag = 0;
+		memset(chvt_backup_selmon, 0, sizeof(chvt_backup_selmon));
+		memset(chvt_backup_layouts, 0, sizeof(chvt_backup_layouts));
+	}
 
 	/* The xdg-protocol specifies:
 	 *
@@ -4041,7 +4068,13 @@ mapnotify(struct wl_listener *listener, void *data) {
 	setborder_color(c);
 
 	// make sure the animation is open type
-	c->is_pending_open_animation = true;
+	// skip open animation for non-floating windows in tabbed layout
+	if (c->mon && !c->isfloating &&
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED) {
+		c->is_pending_open_animation = false;
+	} else {
+		c->is_pending_open_animation = true;
+	}
 	resize(c, c->geom, 0);
 	printstatus();
 }
@@ -5984,6 +6017,11 @@ void updatetitle(struct wl_listener *listener, void *data) {
 		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
 	if (c == focustop(c->mon))
 		printstatus();
+
+	/* Rebuild tab bar when a title changes in tabbed layout */
+	if (c->mon && ISTILED(c) &&
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED)
+		arrange(c->mon, false, false);
 }
 
 void // 17 fix to 0.5
@@ -6353,6 +6391,9 @@ static void setgeometrynotify(struct wl_listener *listener, void *data) {
 #endif
 
 int32_t main(int32_t argc, char *argv[]) {
+	/* Clear LD_PRELOAD so child processes (Xwayland, etc.) are not affected */
+	unsetenv("LD_PRELOAD");
+
 	char *startup_cmd = NULL;
 	int32_t c;
 

@@ -237,3 +237,12 @@ double shadows_blur = 15;
 int32_t shadows_position_x = 0;
 int32_t shadows_position_y = 0;
 float shadowscolor[] = COLOR(0x000000ff);
+
+/* tabbed layout */
+int32_t tabbar_height = 24;
+char tabbar_font_family[256] = "monospace";
+float tabbar_font_size = 14.0;
+float tabbar_active_bg_color[4] = {0.2, 0.4, 0.8, 1.0};
+float tabbar_inactive_bg_color[4] = {0.15, 0.15, 0.15, 1.0};
+float tabbar_active_text_color[4] = {1.0, 1.0, 1.0, 1.0};
+float tabbar_inactive_text_color[4] = {0.6, 0.6, 0.6, 1.0};

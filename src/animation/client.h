@@ -242,7 +242,9 @@ void buffer_set_effect(Client *c, BufferData data) {
 
 	if (c->isnoradius || c->isfullscreen ||
 		(no_radius_when_single && c->mon &&
-		 c->mon->visible_tiling_clients == 1)) {
+		 c->mon->visible_tiling_clients == 1) ||
+		(c->mon && !c->isfloating &&
+		 c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED)) {
 		data.corner_location = CORNER_LOCATION_NONE;
 	}
 
@@ -721,6 +723,16 @@ void client_animation_next_tick(Client *c) {
 		.height = height,
 	};
 
+	/* Animate tab bar along with the focused client during tag-in */
+	if (c->animation.tagining && c->mon && c->mon->tabbar_tree &&
+		c == focustop(c->mon) &&
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED) {
+		int32_t offset_x = x - c->current.x;
+		int32_t offset_y = y - c->current.y;
+		wlr_scene_node_set_position(&c->mon->tabbar_tree->node, offset_x, offset_y);
+		wlr_scene_node_set_enabled(&c->mon->tabbar_tree->node, true);
+	}
+
 	c->is_pending_open_animation = false;
 
 	if (animation_passed >= 1.0) {
@@ -733,9 +745,20 @@ void client_animation_next_tick(Client *c) {
 		c->animation.tagining = false;
 		c->animation.running = false;
 
+		/* Reset tab bar position after animation completes */
+		if (c->mon && c->mon->tabbar_tree &&
+			c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED &&
+			c == focustop(c->mon)) {
+			wlr_scene_node_set_position(&c->mon->tabbar_tree->node, 0, 0);
+			wlr_scene_node_set_enabled(&c->mon->tabbar_tree->node, true);
+		}
+
 		if (c->animation.tagouting) {
 			c->animation.tagouting = false;
 			wlr_scene_node_set_enabled(&c->scene->node, false);
+
+
+
 			client_set_suspended(c, true);
 			c->animation.tagouted = true;
 			c->animation.current = c->geom;
@@ -971,7 +994,14 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->animainit_geom.height = c->animation.current.height;
 		c->animainit_geom.width = c->animation.current.width;
 	} else if (c->is_pending_open_animation) {
-		set_client_open_animation(c, c->geom);
+		/* Skip open animation in tabbed layout */
+		if (c->mon && c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED
+			&& ISTILED(c)) {
+			c->is_pending_open_animation = false;
+			c->animainit_geom = c->geom;
+		} else {
+			set_client_open_animation(c, c->geom);
+		}
 	} else {
 		c->animainit_geom = c->animation.current;
 	}
