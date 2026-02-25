@@ -158,6 +158,7 @@ typedef struct {
 
 typedef struct {
 	int32_t id;
+	char *name;
 	char *layout_name;
 	char *monitor_name;
 	char *monitor_make;
@@ -1912,6 +1913,7 @@ bool parse_option(Config *config, char *key, char *value) {
 
 		// 设置默认值
 		rule->id = 0;
+		rule->name = NULL;
 		rule->layout_name = NULL;
 		rule->monitor_name = NULL;
 		rule->monitor_make = NULL;
@@ -1936,6 +1938,9 @@ bool parse_option(Config *config, char *key, char *value) {
 
 				if (strcmp(key, "id") == 0) {
 					rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
+				} else if (strcmp(key, "name") == 0) {
+					free(rule->name);
+					rule->name = strdup(val);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
@@ -3005,6 +3010,8 @@ void free_config(void) {
 	// 释放 tag_rules
 	if (config.tag_rules) {
 		for (int32_t i = 0; i < config.tag_rules_count; i++) {
+			if (config.tag_rules[i].name)
+				free((void *)config.tag_rules[i].name);
 			if (config.tag_rules[i].layout_name)
 				free((void *)config.tag_rules[i].layout_name);
 			if (config.tag_rules[i].monitor_name)
@@ -3797,6 +3804,11 @@ void parse_tagrule(Monitor *m) {
 	Client *c = NULL;
 	bool match_rule = false;
 
+	/* Reset tag names to defaults so removed name: rules take effect on reload */
+	strncpy(m->tag_names[0], "overview", sizeof(m->tag_names[0]) - 1);
+	for (i = 1; i <= (int32_t)LENGTH(tags); i++)
+		strncpy(m->tag_names[i], tags[i - 1], sizeof(m->tag_names[i]) - 1);
+
 	for (i = 0; i <= LENGTH(tags); i++) {
 		m->pertag->nmasters[i] = default_nmaster;
 		m->pertag->mfacts[i] = default_mfact;
@@ -3837,6 +3849,9 @@ void parse_tagrule(Monitor *m) {
 
 		if (config.tag_rules_count > 0 && match_rule) {
 
+			if (tr.name && tr.id >= 0 && tr.id < 21)
+				strncpy(m->tag_names[tr.id], tr.name, 63);
+
 			for (jk = 0; jk < LENGTH(layouts); jk++) {
 				if (tr.layout_name &&
 					strcmp(layouts[jk].name, tr.layout_name) == 0) {
@@ -3865,6 +3880,8 @@ void parse_tagrule(Monitor *m) {
 	}
 }
 
+void refresh_workspace_names(Monitor *m);
+
 void reapply_tagrule(void) {
 	Monitor *m = NULL;
 	wl_list_for_each(m, &mons, link) {
@@ -3872,6 +3889,7 @@ void reapply_tagrule(void) {
 			continue;
 		}
 		parse_tagrule(m);
+		refresh_workspace_names(m);
 	}
 }
 

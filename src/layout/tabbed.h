@@ -113,9 +113,27 @@ static struct wlr_buffer *tabbar_create_text_buffer(const char *text,
 	return &buf->base;
 }
 
-static void tabbar_cleanup(Monitor *m) {
+/* Clear tab bar children without destroying the tree node itself.
+ * Destroying individual children triggers correct per-rect damage; destroying
+ * the whole tree at once causes SceneFX to mis-track damage for rounded rects,
+ * leaving ghost pixels behind. The tree is kept alive across rebuilds. */
+static void tabbar_clear_children(Monitor *m) {
 	if (m->tabbar_tree) {
-		/* Re-enable all hidden scene nodes before cleanup */
+		struct wlr_scene_node *child, *tmp;
+		wl_list_for_each_safe(child, tmp, &m->tabbar_tree->children, link)
+			wlr_scene_node_destroy(child);
+	}
+	free(m->tabbar_tab_offsets);
+	m->tabbar_tab_offsets = NULL;
+	free(m->tabbar_clients);
+	m->tabbar_clients = NULL;
+	m->tabbar_n = 0;
+}
+
+static void tabbar_cleanup(Monitor *m) {
+	tabbar_clear_children(m);
+	if (m->tabbar_tree) {
+		/* Re-enable all hidden scene nodes before tearing down */
 		Client *c;
 		wl_list_for_each(c, &clients, link) {
 			if (VISIBLEON(c, m) && ISTILED(c))
@@ -124,11 +142,6 @@ static void tabbar_cleanup(Monitor *m) {
 		wlr_scene_node_destroy(&m->tabbar_tree->node);
 		m->tabbar_tree = NULL;
 	}
-	free(m->tabbar_tab_offsets);
-	m->tabbar_tab_offsets = NULL;
-	free(m->tabbar_clients);
-	m->tabbar_clients = NULL;
-	m->tabbar_n = 0;
 	m->tabbar_prev_n = 0;
 	m->tabbar_prev_focused = NULL;
 }
@@ -167,12 +180,10 @@ tabbed(Monitor *m) {
 
 	if (n == 0) {
 		tabbar_cleanup(m);
-		m->tabbar_prev_n = 0;
-		m->tabbar_prev_focused = NULL;
 		return;
 	}
 
-	/* Find the focused tiled client early for dirty check */
+	/* Find focused tiled client */
 	Client *focused = NULL;
 	Client *top = focustop(m);
 	if (top && ISTILED(top)) {
@@ -186,18 +197,16 @@ tabbed(Monitor *m) {
 		}
 	}
 
-	/* Skip tab bar rebuild if nothing changed */
-	if (m->tabbar_tree && m->tabbar_prev_n == n &&
-		m->tabbar_prev_focused == focused) {
-		goto position_windows;
+	/* Clear old children — individual child destruction triggers correct damage
+	 * per rect; destroying the whole tree at once breaks SceneFX damage tracking
+	 * for rounded rects and leaves ghost pixels. Tree node is reused. */
+	tabbar_clear_children(m);
+
+	if (!m->tabbar_tree) {
+		m->tabbar_tree = wlr_scene_tree_create(layers[LyrTop]);
+		if (!m->tabbar_tree)
+			return;
 	}
-
-	/* Clean up old tab bar and recreate */
-	tabbar_cleanup(m);
-
-	m->tabbar_tree = wlr_scene_tree_create(layers[LyrOverlay]);
-	if (!m->tabbar_tree)
-		return;
 
 	/* Gaps */
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
@@ -228,16 +237,14 @@ tabbed(Monitor *m) {
 	int tabbar_border_h = bar_h + bw; /* tab bar + top border only */
 	struct wlr_scene_rect *border_rect;
 
-	/* Top border */
-	border_rect = wlr_scene_rect_create(m->tabbar_tree, outer_w, bw, focuscolor);
+	/* Single outer frame rect — provides all four border edges (top, left, right,
+	 * and the line separating tab bar from window). Tab backgrounds drawn on top
+	 * fill the inner area, leaving just bw-wide borders visible around the edges.
+	 * Using one rect avoids corner gaps that arise when rounding 3 separate rects. */
+	border_rect = wlr_scene_rect_create(m->tabbar_tree, outer_w, tabbar_border_h, focuscolor);
 	wlr_scene_node_set_position(&border_rect->node, outer_x, outer_y);
-	/* Left border (tab bar height only) */
-	border_rect = wlr_scene_rect_create(m->tabbar_tree, bw, tabbar_border_h, focuscolor);
-	wlr_scene_node_set_position(&border_rect->node, outer_x, outer_y);
-	/* Right border (tab bar height only) */
-	border_rect = wlr_scene_rect_create(m->tabbar_tree, bw, tabbar_border_h, focuscolor);
-	wlr_scene_node_set_position(&border_rect->node, outer_x + outer_w - bw, outer_y);
-	/* No bottom border — window's own top border acts as separator */
+	if (border_radius > 0)
+		wlr_scene_rect_set_corner_radius(border_rect, border_radius, CORNER_LOCATION_TOP);
 
 	/* Store tab info for mouse click handling */
 	m->tabbar_y = bar_y;
@@ -276,6 +283,13 @@ tabbed(Monitor *m) {
 		struct wlr_scene_rect *tab_bg = wlr_scene_rect_create(
 			m->tabbar_tree, tw, bar_h, bg);
 		wlr_scene_node_set_position(&tab_bg->node, bar_x + tx, bar_y);
+		if (border_radius > 0) {
+			enum corner_location tab_corners = CORNER_LOCATION_NONE;
+			if (i == 0)     tab_corners |= CORNER_LOCATION_TOP_LEFT;
+			if (i == n - 1) tab_corners |= CORNER_LOCATION_TOP_RIGHT;
+			if (tab_corners != CORNER_LOCATION_NONE)
+				wlr_scene_rect_set_corner_radius(tab_bg, border_radius, tab_corners);
+		}
 
 		/* Text overlay (transparent background, rendered with cairo/pango) */
 		const char *title = client_get_title(c);
@@ -298,11 +312,6 @@ tabbed(Monitor *m) {
 		}
 	}
 
-	/* Save state for dirty tracking */
-	m->tabbar_prev_n = n;
-	m->tabbar_prev_focused = focused;
-
-position_windows:;
 	/* Recalculate gaps for window positioning */
 	int32_t gappoh = enablegaps ? m->gappoh : 0;
 	int32_t gappov = enablegaps ? m->gappov : 0;

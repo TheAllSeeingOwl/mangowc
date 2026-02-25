@@ -25,6 +25,12 @@ enum corner_location set_client_corner_location(Client *c) {
 		c->mon->m.y + c->mon->m.height) {
 		current_corner_location &= ~CORNER_LOCATION_BOTTOM; // 清除下标志位
 	}
+	/* In TABBED layout the tab bar sits above the window, so its top edge is
+	 * flush against the tab bar — don't round the top corners of the window */
+	if (!c->isfloating && c->mon &&
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED) {
+		current_corner_location &= ~CORNER_LOCATION_TOP;
+	}
 	return current_corner_location;
 }
 
@@ -230,9 +236,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 
 	if (c->isnoradius || c->isfullscreen ||
 		(no_radius_when_single && c->mon &&
-		 c->mon->visible_tiling_clients == 1) ||
-		(c->mon && !c->isfloating &&
-		 c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == TABBED)) {
+		 c->mon->visible_tiling_clients == 1)) {
 		data.corner_location = CORNER_LOCATION_NONE;
 	}
 

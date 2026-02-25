@@ -539,6 +539,7 @@ struct Monitor {
 	Client **tabbar_clients; /* client for each tab */
 	int tabbar_prev_n;       /* dirty tracking: previous tab count */
 	Client *tabbar_prev_focused; /* dirty tracking: previous focused client */
+	char tag_names[21][64]; /* custom tag names; index 0=overview, 1-20=tags */
 };
 
 typedef struct {
@@ -2931,7 +2932,11 @@ void createmon(struct wl_listener *listener, void *data) {
 		m->pertag->curtag = m->pertag->prevtag = 1;
 	}
 
+	/* Index 0 = overview, 1..LENGTH(tags) = normal tags */
+	strncpy(m->tag_names[0], "overview", sizeof(m->tag_names[0]) - 1);
 	for (i = 0; i <= LENGTH(tags); i++) {
+		if (i > 0)
+			strncpy(m->tag_names[i], tags[i - 1], sizeof(m->tag_names[i]) - 1);
 		m->pertag->nmasters[i] = default_nmaster;
 		m->pertag->mfacts[i] = default_mfact;
 		m->pertag->ltidxs[i] = &layouts[0];
@@ -5573,7 +5578,7 @@ void setup(void) {
 		wlr_log(WLR_INFO, "VR will not be available.");
 	}
 
-	wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 2, NULL,
+	wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 3, NULL,
 					 dwl_ipc_manager_bind);
 
 	// 创建顶层管理句柄

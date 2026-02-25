@@ -209,6 +209,7 @@ enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
 
 static const char *tags[] = {
 	"1", "2", "3", "4", "5", "6", "7", "8", "9",
+	"10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
 };
 
 float focused_opacity = 1.0;

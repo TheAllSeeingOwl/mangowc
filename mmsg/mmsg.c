@@ -16,6 +16,8 @@
 		exit(EXIT_FAILURE);                                                    \
 	} while (0)
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 char *argv0;
 
 static enum {
@@ -87,10 +89,11 @@ static void noop_description(void *data, struct wl_output *wl_output,
 
 // 将 n 转换为 9 位二进制字符串，结果存入 buf（至少长度 10）
 void bin_str_9bits(char *buf, uint32_t n) {
-	for (int32_t i = 8; i >= 0; i--) {
+	int bits = tagcount > 0 ? (int)tagcount : 20;
+	for (int32_t i = bits - 1; i >= 0; i--) {
 		*buf++ = ((n >> i) & 1) ? '1' : '0';
 	}
-	*buf = '\0'; // 字符串结尾
+	*buf = '\0';
 }
 
 static void dwl_ipc_tags(void *data,
@@ -395,7 +398,7 @@ static void dwl_ipc_output_frame(void *data,
 
 			printf("%s clients %u\n", output_name, total_clients);
 
-			char occ_str[10], seltags_str[10], urg_str[10];
+			char occ_str[21], seltags_str[21], urg_str[21];
 
 			bin_str_9bits(occ_str, occ);
 			bin_str_9bits(seltags_str, seltags);
@@ -407,6 +410,17 @@ static void dwl_ipc_output_frame(void *data,
 		}
 	}
 	fflush(stdout);
+}
+
+static void dwl_ipc_output_tag_name(void *data,
+									struct zdwl_ipc_output_v2 *dwl_ipc_output,
+									uint32_t tag, const char *name) {
+	if (!(tflag && mode & GET))
+		return;
+	char *output_name = data;
+	if (output_name)
+		printf("%s ", output_name);
+	printf("tag_name %u %s\n", tag + 1, name);
 }
 
 static const struct zdwl_ipc_output_v2_listener dwl_ipc_output_listener = {
@@ -427,6 +441,7 @@ static const struct zdwl_ipc_output_v2_listener dwl_ipc_output_listener = {
 	.kb_layout = dwl_ipc_output_kb_layout,
 	.keymode = dwl_ipc_output_keymode,
 	.scalefactor = dwl_ipc_output_scalefactor,
+	.tag_name = dwl_ipc_output_tag_name,
 	.frame = dwl_ipc_output_frame,
 };
 
@@ -473,7 +488,8 @@ static void global_add(void *data, struct wl_registry *wl_registry,
 		}
 	} else if (strcmp(interface, zdwl_ipc_manager_v2_interface.name) == 0) {
 		dwl_ipc_manager = wl_registry_bind(wl_registry, name,
-										   &zdwl_ipc_manager_v2_interface, 2);
+										   &zdwl_ipc_manager_v2_interface,
+										   MIN(version, 3));
 		zdwl_ipc_manager_v2_add_listener(dwl_ipc_manager, &dwl_ipc_listener,
 										 NULL);
 	}

@@ -211,6 +211,14 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 											monitor->wlr_output->scale * 100);
 	}
 
+	if (wl_resource_get_version(ipc_output->resource) >=
+		ZDWL_IPC_OUTPUT_V2_TAG_NAME_SINCE_VERSION) {
+		for (int _ti = 0; _ti < (int)LENGTH(tags); _ti++) {
+			zdwl_ipc_output_v2_send_tag_name(ipc_output->resource, _ti,
+											 monitor->tag_names[_ti + 1]);
+		}
+	}
+
 	zdwl_ipc_output_v2_send_frame(ipc_output->resource);
 }
 
