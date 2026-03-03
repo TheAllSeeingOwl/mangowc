@@ -3905,7 +3905,19 @@ void reapply_tagrule(void) {
 		if (!m->wlr_output->enabled) {
 			continue;
 		}
+		/* Save current per-tag layouts so runtime changes (e.g. user
+		 * switching to tabbed) survive a config reload.  Tag-rule
+		 * layouts only apply at initial startup; reloads preserve
+		 * whatever the user has set at runtime. */
+		const Layout *saved_layouts[LENGTH(tags) + 1];
+		for (int32_t i = 0; i <= (int32_t)LENGTH(tags); i++)
+			saved_layouts[i] = m->pertag->ltidxs[i];
+
 		parse_tagrule(m);
+
+		for (int32_t i = 0; i <= (int32_t)LENGTH(tags); i++)
+			m->pertag->ltidxs[i] = saved_layouts[i];
+
 		refresh_workspace_names(m);
 	}
 }
@@ -3928,7 +3940,13 @@ void reset_option(void) {
 	reapply_tagrule();
 	reapply_monitor_rules();
 
-	arrange(selmon, false, false);
+	/* Re-arrange all monitors, not just selmon, so tabbed layouts
+	 * on non-focused monitors also pick up color/config changes. */
+	Monitor *m;
+	wl_list_for_each(m, &mons, link) {
+		if (m->wlr_output->enabled)
+			arrange(m, false, false);
+	}
 }
 
 int32_t reload_config(const Arg *arg) {
