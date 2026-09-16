@@ -97,6 +97,8 @@ int32_t change_vt(const Arg *arg) {
 		strncpy(server.chvt_backup_monitor_name,
 				server.selected_monitor->wlr_output->name,
 				sizeof(server.chvt_backup_monitor_name) - 1);
+		for (int32_t i = 0; i <= config.tag_num; i++)
+			chvt_backup_layouts[i] = server.selected_monitor->pertag->ltidxs[i];
 	}
 
 	wlr_session_change_vt(server.session, arg->ui);

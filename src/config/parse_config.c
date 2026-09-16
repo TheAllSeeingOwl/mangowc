@@ -2621,13 +2621,44 @@ void reapply_pointer(void) {
 	}
 }
 
+/* Does any tagrule assign a layout to this tag on this monitor? */
+static bool tag_has_rule_layout(Monitor *m, uint32_t tag) {
+	int32_t i;
+
+	for (i = 0; i < config.tag_rules_count; i++) {
+		const ConfigTagRule *tr = &config.tag_rules[i];
+
+		if (!tr->layout_name || !tag_rule_matches_monitor(tr, m))
+			continue;
+		if (tr->id_wildcard || (uint32_t)tr->id == tag)
+			return true;
+	}
+	return false;
+}
+
 void reapply_tagrule(void) {
 	Monitor *m = NULL;
 	wl_list_for_each(m, &server.monitors, link) {
 		if (!m->wlr_output->enabled) {
 			continue;
 		}
+
+		/* parse_tagrule resets every slot to defaults, which would throw away
+		 * a layout the user picked at runtime. Save the current layouts and
+		 * put back only those the config does not have an opinion about, so
+		 * editing a tagrule's layout_name still takes effect on reload. */
+		const Layout *saved[PERTAG_SLOTS];
+		int32_t i;
+
+		for (i = 0; i <= config.tag_num; i++)
+			saved[i] = m->pertag->ltidxs[i];
+
 		parse_tagrule(m);
+
+		for (i = 0; i <= config.tag_num; i++)
+			if (saved[i] && !tag_has_rule_layout(m, i))
+				m->pertag->ltidxs[i] = saved[i];
+
 		refresh_workspace_names(m);
 	}
 }
@@ -2651,7 +2682,10 @@ void reset_option(void) {
 	reapply_tagrule();
 	reapply_monitor_rules();
 
-	arrange(server.selected_monitor, false, false);
+	/* Every monitor, not just the selected one: config changes affect all. */
+	Monitor *m = NULL;
+	wl_list_for_each(m, &server.monitors, link) if (m->wlr_output->enabled)
+		arrange(m, false, false);
 }
 
 int32_t parse_force(const char *str) {
