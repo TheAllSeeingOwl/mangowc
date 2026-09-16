@@ -1397,6 +1397,7 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 		return;
 
 	m->frame_serial++;
+	clock_gettime(CLOCK_MONOTONIC, &server.frame_now);
 
 	// Draws layers and fade-out effects.
 	for (i = 0; i < LENGTH(m->layers); i++) {
