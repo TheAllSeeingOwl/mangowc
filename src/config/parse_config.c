@@ -12,6 +12,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/hdr.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
@@ -1416,6 +1417,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		// Sets default values.
 		rule->id = 0;
 		rule->id_wildcard = false;
+		rule->name = NULL;
 		rule->layout_name = NULL;
 		rule->monitor_name = NULL;
 		rule->monitor_make = NULL;
@@ -1450,6 +1452,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						rule->id_wildcard = false;
 						rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
 					}
+				} else if (strcmp(key, "name") == 0) {
+					free(rule->name);
+					rule->name = strdup(val);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
@@ -2673,6 +2678,7 @@ void reapply_tagrule(void) {
 			continue;
 		}
 		parse_tagrule(m);
+		refresh_workspace_names(m);
 	}
 }
 
@@ -3572,6 +3578,8 @@ void free_config(void) {
 	// Frees tag_rules.
 	if (config.tag_rules) {
 		for (int32_t i = 0; i < config.tag_rules_count; i++) {
+			if (config.tag_rules[i].name)
+				free((void *)config.tag_rules[i].name);
 			if (config.tag_rules[i].layout_name)
 				free((void *)config.tag_rules[i].layout_name);
 			if (config.tag_rules[i].monitor_name)
@@ -4643,6 +4651,10 @@ void reapply_master(void) {
 
 // Reset a pertag slot to defaults.
 void tag_slot_set_defaults(Monitor *m, uint32_t tag) {
+	/* Reset unconditionally so a name: rule deleted from the config is
+	 * actually forgotten on reload. */
+	snprintf(m->pertag->names[tag], sizeof(m->pertag->names[tag]), "%s",
+			 tag == 0 ? "overview" : tags[tag - 1]);
 	m->pertag->nmasters[tag] = config.default_nmaster;
 	m->pertag->mfacts[tag] = config.default_mfact;
 	m->pertag->ltidxs[tag] = &layouts[0];
@@ -4677,6 +4689,10 @@ bool tag_rule_matches_monitor(const ConfigTagRule *tr, Monitor *m) {
 // Apply one tag rule to a slot (caller checks coverage).
 void tag_rule_apply_to_slot(Monitor *m, const ConfigTagRule *tr, uint32_t tag) {
 	int32_t jk;
+
+	if (tr->name)
+		snprintf(m->pertag->names[tag], sizeof(m->pertag->names[tag]), "%s",
+				 tr->name);
 
 	for (jk = 0; jk < LENGTH(layouts); jk++) {
 		if (tr->layout_name && strcmp(layouts[jk].name, tr->layout_name) == 0)
