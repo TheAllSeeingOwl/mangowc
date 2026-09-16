@@ -1,4 +1,6 @@
 #include "mango/manage/monitor.h"
+
+const Layout *chvt_backup_layouts[PERTAG_SLOTS];
 #include "mango/animation/client.h"
 #include "mango/animation/common.h"
 #include "mango/animation/layer.h"
@@ -785,14 +787,14 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	for (int i = 0; i < PERTAG_SLOTS; i++)
 		m->pertag->scroller_state[i] = NULL;
 
-	if (server.chvt_backup_tag &&
-		regex_match(server.chvt_backup_monitor_name, m->wlr_output->name)) {
+	bool chvt_restoring =
+		server.chvt_backup_tag &&
+		regex_match(server.chvt_backup_monitor_name, m->wlr_output->name);
+
+	if (chvt_restoring) {
 		m->tagset[0] = m->tagset[1] =
 			(1 << (server.chvt_backup_tag - 1)) & TAGMASK;
 		m->pertag->curtag = m->pertag->prevtag = server.chvt_backup_tag;
-		server.chvt_backup_tag = 0;
-		memset(server.chvt_backup_monitor_name, 0,
-			   sizeof(server.chvt_backup_monitor_name));
 	} else {
 		m->tagset[0] = m->tagset[1] = 1;
 		m->pertag->curtag = m->pertag->prevtag = 1;
@@ -806,6 +808,17 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 
 	// Applies the tag rule.
 	parse_tagrule(m);
+
+	/* After parse_tagrule, so the restored layouts are not reset by it. */
+	if (chvt_restoring) {
+		for (i = 0; i <= config.tag_num; i++)
+			if (chvt_backup_layouts[i])
+				m->pertag->ltidxs[i] = chvt_backup_layouts[i];
+		server.chvt_backup_tag = 0;
+		memset(server.chvt_backup_monitor_name, 0,
+			   sizeof(server.chvt_backup_monitor_name));
+		memset(chvt_backup_layouts, 0, sizeof(chvt_backup_layouts));
+	}
 
 	if (config.blur) {
 		m->blur = wlr_scene_optimized_blur_create(&server.scene->tree, 0, 0);
