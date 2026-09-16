@@ -4041,6 +4041,9 @@ void client_add_group_bar(Client *c) {
 
 	c->group_bar = mango_group_bar_create(c, GroupBar, server.layers[layer],
 										  config.groupbardata, 0, 0);
+	if (!c->group_bar)
+		return;
+
 	wlr_scene_node_lower_to_bottom(&c->group_bar->scene->node);
 	wlr_scene_node_set_enabled(&c->group_bar->scene->node, false);
 	mango_group_bar_update(c->group_bar, client_get_title(c),
