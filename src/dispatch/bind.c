@@ -1293,7 +1293,9 @@ void spawn(const Arg *arg) {
 		setsid();
 
 		wordexp_t p;
-		if (wordexp(arg->v, &p, 0) != 0) {
+		/* WRDE_NOCMD: expand words, but do not evaluate $(...) or backticks.
+		 * spawn is the no-shell variant; spawn_shell exists for the rest. */
+		if (wordexp(arg->v, &p, WRDE_NOCMD) != 0) {
 			mango_error(true, WLR_DEBUG, "mango: wordexp failed for '%s'\n",
 						(char *)arg->v);
 			_exit(EXIT_FAILURE);

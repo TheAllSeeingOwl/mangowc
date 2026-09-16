@@ -357,6 +357,10 @@ int ipc_handle_connection(int fd, uint32_t mask, void *data) {
 	fcntl(client_fd, F_SETFD, flags | FD_CLOEXEC);
 
 	struct ipc_client_state *client = calloc(1, sizeof(*client));
+	if (!client) {
+		close(client_fd);
+		return 0;
+	}
 	client->fd = client_fd;
 	client->loop = loop;
 	client->source = wl_event_loop_add_fd(
@@ -759,6 +763,10 @@ void handle_command(int client_fd, const char *cmd_raw) {
 				}
 			}
 			if (gi < 0) {
+				/* groups[] is fixed size; drop extra devices rather than
+				 * writing past the end of the array. */
+				if (group_count >= (int)LENGTH(groups))
+					continue;
 				gi = group_count++;
 				groups[gi].group = grp;
 				snprintf(groups[gi].name, sizeof(groups[gi].name), "%s",
@@ -878,9 +886,18 @@ void handle_command(int client_fd, const char *cmd_raw) {
 
 		if (client_id > 0) {
 			arg.tc = client_by_id((uint32_t)client_id);
-			if (arg.tc == NULL)
-				return send_static_json(client_fd,
-										"{\"error\":\"no client found\"}\n");
+			if (arg.tc == NULL) {
+				send_static_json(client_fd,
+								 "{\"error\":\"no client found\"}\n");
+				if (arg.v)
+					free(arg.v);
+				if (arg.v2)
+					free(arg.v2);
+				if (arg.v3)
+					free(arg.v3);
+				free(dispatch_copy);
+				return;
+			}
 		}
 
 		if (func) {
@@ -962,6 +979,8 @@ bool handle_watch_command(int fd, const char *cmd,
 		return false;
 
 	struct ipc_watch_client *wc = calloc(1, sizeof(*wc));
+	if (!wc)
+		return false;
 	wc->fd = fd;
 	wc->type = type;
 
