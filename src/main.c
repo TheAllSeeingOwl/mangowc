@@ -896,6 +896,11 @@ void setup(void) {
 }
 
 int32_t main(int32_t argc, char *argv[]) {
+	/* The launch wrapper may set LD_PRELOAD (e.g. for a mesa EGL shim).
+	 * It has already taken effect for this process; clearing it here keeps
+	 * spawned children and Xwayland from inheriting it. */
+	unsetenv("LD_PRELOAD");
+
 	char *startup_cmd = NULL;
 	int32_t c;
 	int readiness_fd = 0;
