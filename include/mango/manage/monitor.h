@@ -105,6 +105,8 @@ struct Pertag {
 	int32_t scroller_ignore_proportion_single[PERTAG_SLOTS];
 	struct DwindleNode *dwindle_root[PERTAG_SLOTS];
 	const Layout *ltidxs[PERTAG_SLOTS];
+	/* Display name per tag slot; index 0 is the overview pseudo-tag. */
+	char names[PERTAG_SLOTS][64];
 	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
 };
 
