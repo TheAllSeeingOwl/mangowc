@@ -315,10 +315,8 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 	if (!l)
 		return;
 
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-
-	int32_t passed_time = timespec_to_ms(&now) - l->animation.time_started;
+	int32_t passed_time =
+		timespec_to_ms(&server.frame_now) - l->animation.time_started;
 	double animation_passed =
 		l->animation.duration
 			? (double)passed_time / (double)l->animation.duration
@@ -427,10 +425,8 @@ void layer_animation_next_tick(LayerSurface *l) {
 	if (!l || !l->mapped)
 		return;
 
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-
-	int32_t passed_time = timespec_to_ms(&now) - l->animation.time_started;
+	int32_t passed_time =
+		timespec_to_ms(&server.frame_now) - l->animation.time_started;
 	double animation_passed =
 		l->animation.duration
 			? (double)passed_time / (double)l->animation.duration
