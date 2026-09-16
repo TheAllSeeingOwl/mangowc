@@ -4,6 +4,7 @@
 #include "mango/common/types.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 #include <wayland-server-core.h>
 #include <wlr/util/box.h>
 
@@ -159,6 +160,9 @@ struct MangoServer {
 	/* Other runtime state */
 	uint32_t chvt_backup_tag;
 	bool allow_frame_scheduling;
+	/* Taken once per output frame. Every animation tick runs inside that
+	 * pass, so they share one clock read instead of one syscall each. */
+	struct timespec frame_now;
 	char chvt_backup_monitor_name[32];
 	bool cursor_hidden;
 	bool tag_combo;
