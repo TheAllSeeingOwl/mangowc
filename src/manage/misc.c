@@ -143,6 +143,9 @@ int32_t is_descendant_process(pid_t p, pid_t c) {
 	return (int32_t)c;
 }
 
+/* Every path below writes at most 4 characters plus the terminator, so
+ * callers must supply a buffer of at least MANGO_LAYOUT_ABBR_MAX bytes. */
+#define MANGO_LAYOUT_ABBR_MAX 8
 void get_layout_abbr(char *abbr, const char *full_name) {
 	// Clears the output buffer.
 	abbr[0] = '\0';
@@ -150,7 +153,8 @@ void get_layout_abbr(char *abbr, const char *full_name) {
 	// 1. Try to find the name in the mapping table.
 	for (int32_t i = 0; layout_mappings[i].full_name != NULL; i++) {
 		if (strcmp(full_name, layout_mappings[i].full_name) == 0) {
-			strcpy(abbr, layout_mappings[i].abbr);
+			snprintf(abbr, MANGO_LAYOUT_ABBR_MAX, "%s",
+					 layout_mappings[i].abbr);
 			return;
 		}
 	}
