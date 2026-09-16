@@ -252,20 +252,20 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							 ? surface_height
 							 : buffer_data->height_scale * surface_height;
 
-		if (surface_width > buffer_data->width &&
-			wlr_subsurface_try_from_wlr_surface(surface) == NULL)
+		/* Four identical lookups on an unchanging surface; hoist to one. */
+		bool is_subsurface =
+			wlr_subsurface_try_from_wlr_surface(surface) != NULL;
+
+		if (surface_width > buffer_data->width && !is_subsurface)
 			surface_width = buffer_data->width;
 
-		if (surface_height > buffer_data->height &&
-			wlr_subsurface_try_from_wlr_surface(surface) == NULL)
+		if (surface_height > buffer_data->height && !is_subsurface)
 			surface_height = buffer_data->height;
 
-		if (surface_width > buffer_data->width &&
-			wlr_subsurface_try_from_wlr_surface(surface) != NULL)
+		if (surface_width > buffer_data->width && is_subsurface)
 			return;
 
-		if (surface_height > buffer_data->height &&
-			wlr_subsurface_try_from_wlr_surface(surface) != NULL)
+		if (surface_height > buffer_data->height && is_subsurface)
 			return;
 
 		if (surface_height > 0 && surface_width > 0)
@@ -1085,10 +1085,8 @@ void fadeout_client_animation_next_tick(Client *c) {
 	if (!c)
 		return;
 
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-
-	int32_t passed_time = timespec_to_ms(&now) - c->animation.time_started;
+	int32_t passed_time =
+		timespec_to_ms(&server.frame_now) - c->animation.time_started;
 	double animation_passed =
 		c->animation.duration
 			? (double)passed_time / (double)c->animation.duration
@@ -1145,10 +1143,8 @@ void fadeout_client_animation_next_tick(Client *c) {
 	}
 }
 void client_animation_next_tick(Client *c) {
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-
-	int32_t passed_time = timespec_to_ms(&now) - c->animation.time_started;
+	int32_t passed_time =
+		timespec_to_ms(&server.frame_now) - c->animation.time_started;
 	double animation_passed =
 		c->animation.duration
 			? (double)passed_time / (double)c->animation.duration
@@ -1633,10 +1629,8 @@ bool client_apply_focus_opacity(Client *c) {
 		client_set_opacity(c, 1);
 	} else if (c->animation.running && c->animation.action == OPEN) {
 		c->opacity_animation.running = false;
-		struct timespec now;
-		clock_gettime(CLOCK_MONOTONIC, &now);
-
-		int32_t passed_time = timespec_to_ms(&now) - c->animation.time_started;
+		int32_t passed_time =
+			timespec_to_ms(&server.frame_now) - c->animation.time_started;
 		double linear_progress =
 			c->animation.duration
 				? (double)passed_time / (double)c->animation.duration
@@ -1670,11 +1664,8 @@ bool client_apply_focus_opacity(Client *c) {
 		}
 		client_set_border_color(c, c->opacity_animation.target_border_color);
 	} else if (config.animations && c->opacity_animation.running) {
-		struct timespec now;
-		clock_gettime(CLOCK_MONOTONIC, &now);
-
-		int32_t passed_time =
-			timespec_to_ms(&now) - c->opacity_animation.time_started;
+		int32_t passed_time = timespec_to_ms(&server.frame_now) -
+							  c->opacity_animation.time_started;
 		double linear_progress =
 			c->opacity_animation.duration
 				? (double)passed_time / (double)c->opacity_animation.duration
