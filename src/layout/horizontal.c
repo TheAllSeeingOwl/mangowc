@@ -53,6 +53,12 @@ static void tile_core(Monitor *m, const LayoutContext *ctx) {
 			break;
 	}
 
+	/* wl_list_for_each leaves fc pointing at the list head when nothing
+	 * matched -- e.g. if visible_fake_tiling_clients is stale. Dereferencing
+	 * it then reads past the head sentinel. */
+	if (&fc->link == &server.clients)
+		return;
+
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[get_mon_curtag(m)];
 
@@ -87,11 +93,12 @@ static void tile_core(Monitor *m, const LayoutContext *ctx) {
 					master_surplus_ratio - c->master_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - my - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->master_inner_per = h / (m->w.height - my - cur_gappov -
-										   cur_gappiv * ie * (r - 1));
+				int32_t denom =
+					m->w.height - my - cur_gappov - cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				/* Guard the divide only; keep upstream's integer-division
+				 * semantics for the ratio. */
+				c->master_inner_per = denom > 0 ? h / denom : 0;
 				c->master_mfact_per = mfact;
 			}
 			client_tile_resize(c,
@@ -111,11 +118,12 @@ static void tile_core(Monitor *m, const LayoutContext *ctx) {
 				slave_surplus_ratio = slave_surplus_ratio - c->stack_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - ty - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->stack_inner_per = h / (m->w.height - ty - cur_gappov -
-										  cur_gappiv * ie * (r - 1));
+				int32_t denom =
+					m->w.height - ty - cur_gappov - cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				/* Guard the divide only; keep upstream's integer-division
+				 * semantics for the ratio. */
+				c->stack_inner_per = denom > 0 ? h / denom : 0;
 				c->master_mfact_per = mfact;
 			}
 
@@ -172,6 +180,12 @@ static void right_tile_core(Monitor *m, const LayoutContext *ctx) {
 			break;
 	}
 
+	/* wl_list_for_each leaves fc pointing at the list head when nothing
+	 * matched -- e.g. if visible_fake_tiling_clients is stale. Dereferencing
+	 * it then reads past the head sentinel. */
+	if (&fc->link == &server.clients)
+		return;
+
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[get_mon_curtag(m)];
 
@@ -206,11 +220,12 @@ static void right_tile_core(Monitor *m, const LayoutContext *ctx) {
 					master_surplus_ratio - c->master_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - my - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->master_inner_per = h / (m->w.height - my - cur_gappov -
-										   cur_gappiv * ie * (r - 1));
+				int32_t denom =
+					m->w.height - my - cur_gappov - cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				/* Guard the divide only; keep upstream's integer-division
+				 * semantics for the ratio. */
+				c->master_inner_per = denom > 0 ? h / denom : 0;
 				c->master_mfact_per = mfact;
 			}
 			client_tile_resize(c,
@@ -232,11 +247,12 @@ static void right_tile_core(Monitor *m, const LayoutContext *ctx) {
 				slave_surplus_ratio = slave_surplus_ratio - c->stack_inner_per;
 				c->master_mfact_per = mfact;
 			} else {
-				h = (m->w.height - ty - cur_gappov -
-					 cur_gappiv * ie * (r - 1)) /
-					r;
-				c->stack_inner_per = h / (m->w.height - ty - cur_gappov -
-										  cur_gappiv * ie * (r - 1));
+				int32_t denom =
+					m->w.height - ty - cur_gappov - cur_gappiv * ie * (r - 1);
+				h = denom > 0 ? denom / r : 0;
+				/* Guard the divide only; keep upstream's integer-division
+				 * semantics for the ratio. */
+				c->stack_inner_per = denom > 0 ? h / denom : 0;
 				c->master_mfact_per = mfact;
 			}
 
@@ -274,6 +290,12 @@ static void center_tile_core(Monitor *m, const LayoutContext *ctx) {
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
+
+	/* wl_list_for_each leaves fc pointing at the list head when nothing
+	 * matched -- e.g. if visible_fake_tiling_clients is stale. Dereferencing
+	 * it then reads past the head sentinel. */
+	if (&fc->link == &server.clients)
+		return;
 
 	// Gap parameter handling.
 	int32_t cur_gappiv =
@@ -568,6 +590,12 @@ static void deck_core(Monitor *m, const LayoutContext *ctx) {
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
+
+	/* wl_list_for_each leaves fc pointing at the list head when nothing
+	 * matched -- e.g. if visible_fake_tiling_clients is stale. Dereferencing
+	 * it then reads past the head sentinel. */
+	if (&fc->link == &server.clients)
+		return;
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[get_mon_curtag(m)];
