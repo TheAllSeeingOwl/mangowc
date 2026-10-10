@@ -1257,6 +1257,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		// Sets default values.
 		rule->id = 0;
 		rule->id_wildcard = false;
+		rule->name = NULL;
 		rule->layout_name = NULL;
 		rule->monitor_name = NULL;
 		rule->monitor_make = NULL;
@@ -1291,6 +1292,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						rule->id_wildcard = false;
 						rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
 					}
+				} else if (strcmp(key, "name") == 0) {
+					free(rule->name);
+					rule->name = strdup(val);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {

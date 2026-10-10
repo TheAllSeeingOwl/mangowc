@@ -39,6 +39,26 @@ void remove_workspace_by_tag(uint32_t tag, Monitor *m) {
 		}
 	}
 }
+/* Re-push names after a config reload changed them. */
+void refresh_workspace_names(Monitor *m) {
+	struct workspace *w;
+	wl_list_for_each(w, &workspaces, link) {
+		if (w->m != m)
+			continue;
+		const char *name = get_name_from_tag_on(w->tag, m);
+		if (name)
+			wlr_ext_workspace_handle_v1_set_name(w->ext_workspace, name);
+	}
+}
+
+const char *get_name_from_tag_on(uint32_t tag, Monitor *m) {
+	if (tag > (uint32_t)config.tag_num)
+		return NULL;
+	if (m && m->pertag && m->pertag->names[tag][0])
+		return m->pertag->names[tag];
+	return tag == 0 ? "overview" : tags[tag - 1];
+}
+
 const char *get_name_from_tag(uint32_t tag) {
 	if (tag == 0)
 		return "overview";
@@ -63,7 +83,7 @@ void cleanup_workspaces_by_monitor(Monitor *m) {
 }
 
 void add_workspace_by_tag(int32_t tag, Monitor *m) {
-	const char *name = get_name_from_tag(tag);
+	const char *name = get_name_from_tag_on(tag, m);
 
 	struct workspace *workspace = ecalloc(1, sizeof(*workspace));
 	wl_list_append(&workspaces, &workspace->link);
