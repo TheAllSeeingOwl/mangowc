@@ -194,6 +194,7 @@ typedef struct {
 typedef struct {
 	int32_t id;
 	bool id_wildcard;
+	char *name;
 	char *layout_name;
 	char *monitor_name;
 	char *monitor_make;

@@ -1,5 +1,6 @@
 #include "mango/config/internal.h"
 #include "mango/config/parse.h"
+#include "mango/ext-protocol/ext-workspace.h"
 
 #include <ctype.h>
 #include <libgen.h>
@@ -149,6 +150,7 @@ void reapply_tagrule(void) {
 			continue;
 		}
 		parse_tagrule(m);
+		refresh_workspace_names(m);
 	}
 }
 
@@ -408,6 +410,10 @@ void reapply_master(void) {
 
 // Reset a pertag slot to defaults.
 void tag_slot_set_defaults(Monitor *m, uint32_t tag) {
+	/* Reset unconditionally so a name: rule deleted from the config is
+	 * actually forgotten on reload. */
+	snprintf(m->pertag->names[tag], sizeof(m->pertag->names[tag]), "%s",
+			 tag == 0 ? "overview" : tags[tag - 1]);
 	m->pertag->nmasters[tag] = config.default_nmaster;
 	m->pertag->mfacts[tag] = config.default_mfact;
 	m->pertag->config_ltidxs[tag] = &layouts[0];
@@ -441,6 +447,10 @@ bool tag_rule_matches_monitor(const ConfigTagRule *tr, Monitor *m) {
 
 // Apply one tag rule to a slot (caller checks coverage).
 void tag_rule_apply_to_slot(Monitor *m, const ConfigTagRule *tr, uint32_t tag) {
+	if (tr->name)
+		snprintf(m->pertag->names[tag], sizeof(m->pertag->names[tag]), "%s",
+				 tr->name);
+
 	int32_t jk;
 
 	for (jk = 0; jk < LENGTH(layouts); jk++) {
