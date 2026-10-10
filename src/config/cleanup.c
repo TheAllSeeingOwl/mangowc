@@ -201,6 +201,8 @@ void free_config(void) {
 	// Frees tag_rules.
 	if (config.tag_rules) {
 		for (int32_t i = 0; i < config.tag_rules_count; i++) {
+			if (config.tag_rules[i].name)
+				free((void *)config.tag_rules[i].name);
 			if (config.tag_rules[i].layout_name)
 				free((void *)config.tag_rules[i].layout_name);
 			if (config.tag_rules[i].monitor_name)

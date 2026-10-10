@@ -21,6 +21,8 @@ void handle_ext_commit(struct wl_listener *listener, void *data);
 void goto_workspace(struct workspace *target);
 void toggle_workspace(struct workspace *target);
 const char *get_name_from_tag(uint32_t tag);
+const char *get_name_from_tag_on(uint32_t tag, Monitor *m);
+void refresh_workspace_names(Monitor *m);
 void destroy_workspace(struct workspace *workspace);
 void cleanup_workspaces_by_monitor(Monitor *m);
 void remove_workspace_by_tag(uint32_t tag, Monitor *m);
