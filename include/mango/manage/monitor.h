@@ -99,6 +99,12 @@ struct Monitor {
 	char icc_path[PATH_MAX];
 };
 
+/* Per-tag layouts saved across a VT switch; monitors are destroyed and
+ * recreated, so parse_tagrule would otherwise reset them to defaults.
+ * Lives here because PERTAG_SLOTS is defined in this header and
+ * common/server.h cannot include it without a cycle. */
+extern const Layout *chvt_backup_layouts[PERTAG_SLOTS];
+
 struct Pertag {
 	uint32_t curtag, prevtag;
 	int32_t nmasters[PERTAG_SLOTS];
