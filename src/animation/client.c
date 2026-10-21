@@ -1595,10 +1595,18 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->fake_no_border = false;
 	}
 
-	if (!c->mon->isoverview)
+	if (!c->mon->isoverview) {
+		/* bw is unsigned, so a frame narrower than its own border wraps here
+		 * and reaches wlr_xdg_toplevel_set_size as a negative int32_t, which
+		 * asserts. client_configure_size() already refuses that case; the
+		 * scroller branch above already floors the content size at 1. Do the
+		 * same for the remaining path. */
+		int32_t cw = c->geom.width - 2 * (int32_t)c->bw;
+		int32_t ch = c->geom.height - 2 * (int32_t)c->bw;
 		c->configure_serial =
-			client_set_size(c, c->geom.width - 2 * c->bw,
-							c->geom.height - 2 * c->bw, opts.force_configure);
+			client_set_size(c, (uint32_t)MANGO_MAX(1, cw),
+							(uint32_t)MANGO_MAX(1, ch), opts.force_configure);
+	}
 
 	if (c->configure_serial != 0)
 		c->mon->resizing_count_pending++;
