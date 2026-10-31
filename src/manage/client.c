@@ -83,8 +83,13 @@ bool client_uses_transparent_rendering(Client *c) {
 	}
 
 	/* Clients such as kitty render transparency directly into an alpha buffer.
-	 */
-	return surface->buffer && !wlr_buffer_is_opaque(&surface->buffer->base);
+	 * wlroots already derives this at commit time and caches it on the
+	 * surface, so calling wlr_buffer_is_opaque() again here repeats that work
+	 * on every frame -- and for a client buffer whose DRM format is unknown it
+	 * repeats a buffer data-pointer access too. Read the cached flag instead;
+	 * it is assigned from the same wlr_buffer_is_opaque() call in
+	 * surface_apply_damage(). */
+	return surface->buffer && !surface->WLR_PRIVATE.opaque;
 }
 int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
 								  LayerSurface **pl) {
